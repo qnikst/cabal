@@ -39,23 +39,9 @@ import System.FilePath ( pathSeparator )
 
 generate :: PackageDescription -> LocalBuildInfo -> ComponentLocalBuildInfo -> String
 generate pkg_descr lbi clbi =
-   let pragmas =
+   let other_pragmas =
             cpp_pragma
-         ++ no_rebindable_syntax_pragma
          ++ ffi_pragmas
-         ++ warning_pragmas
-
-       cpp_pragma
-         | supports_cpp = "{-# LANGUAGE CPP #-}\n"
-         | otherwise    = ""
-
-       -- -XRebindableSyntax is problematic because when paired with
-       -- -XOverloadedLists, 'fromListN' is not in scope,
-       -- or -XOverloadedStrings 'fromString' is not in scope,
-       -- so we disable 'RebindableSyntax'.
-       no_rebindable_syntax_pragma
-         | supports_rebindable_syntax = "{-# LANGUAGE NoRebindableSyntax #-}\n"
-         | otherwise                  = ""
 
        ffi_pragmas
         | absolute = ""
@@ -63,9 +49,6 @@ generate pkg_descr lbi clbi =
           "{-# LANGUAGE ForeignFunctionInterface #-}\n"
         | otherwise =
           "{-# OPTIONS_GHC -fffi #-}\n"
-
-       warning_pragmas =
-        "{-# OPTIONS_GHC -fno-warn-missing-import-lists #-}\n"
 
        foreign_imports
         | absolute = ""
@@ -78,21 +61,17 @@ generate pkg_descr lbi clbi =
           "import System.Environment (getExecutablePath)\n"
         | otherwise = ""
 
-       header =
-        pragmas++
-        "module " ++ display paths_modulename ++ " (\n"++
-        "    version,\n"++
+       exports = Version.exports ++
         "    getBinDir, getLibDir, getDynLibDir, getDataDir, getLibexecDir,\n"++
-        "    getDataFileName, getSysconfDir\n"++
-        "  ) where\n"++
-        "\n"++
+        "    getDataFileName, getSysconfDir\n"
+       other_imports = 
         foreign_imports++
         "import qualified Control.Exception as Exception\n"++
-        "import Data.Version (Version(..))\n"++
+        ++ Version.moduleImports ++
         "import System.Environment (getEnv)\n"++
-        reloc_imports ++
-        "import Prelude\n"++
-        "\n"++
+        reloc_imports
+
+       common_body = 
         (if supports_cpp
          then
            ("#if defined(VERSION_base)\n"++
@@ -109,10 +88,7 @@ generate pkg_descr lbi clbi =
          else
            "catchIO :: IO a -> (Exception.IOException -> IO a) -> IO a\n")++
         "catchIO = Exception.catch\n" ++
-        "\n"++
-        "version :: Version"++
-        "\nversion = Version " ++ show branch ++ " []"
-          where branch = versionNumbers $ packageVersion pkg_descr
+        "\n" ++ Version.body
 
        body
         | reloc =
@@ -182,7 +158,7 @@ generate pkg_descr lbi clbi =
           get_prefix_stuff++
           "\n"++
           filename_stuff
-   in header++body
+   in Internal.generate paths_modulename other_pragmas other_imports body
 
  where
         cid = componentUnitId clbi
