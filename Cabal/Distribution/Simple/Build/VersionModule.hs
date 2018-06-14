@@ -15,21 +15,42 @@
 -- at runtime. This code should probably be split off into another module.
 --
 module Distribution.Simple.Build.VersionModule (
-    generate, imports, body
+    generate, imports, body, exports
   ) where
 
-import Distribution.Simple.Build.Internal
+import Prelude ()
+import Distribution.Compat.Prelude
+
+import Distribution.System
+import Distribution.Simple.Compiler
+import qualified Distribution.Simple.Build.Internal as Internal
+import Distribution.Package
+import Distribution.PackageDescription
+import Distribution.Simple.LocalBuildInfo
+import Distribution.Simple.BuildPaths
+import Distribution.Simple.Utils
+import Distribution.Text
+import Distribution.Version
+
+import System.FilePath ( pathSeparator )
 
 -- | Generate Version module.
-generate :: String
-generate = Internal.generate version_modulename imports body
+generate :: LocalBuildInfo -> PackageDescription -> String
+generate lbi pkg_descr =
+    Internal.generate lbi moduleName [] exports imports (body pkg_descr)
+  where
+    moduleName = autogenVersionModuleName pkg_descr
+
 
 -- | List of required imports.
-imports :: String
-imports = "import Data.Version (Version(..))\n"
+imports :: [String]
+imports = ["import Data.Version (Version(..))"]
 
 -- | Body of the module
-body :: String 
-body = "version :: Version"++
-       "\nversion = Version " ++ show branch ++ " []"
+body :: PackageDescription -> String
+body pkg_descr = "version :: Version\n"
+                 ++ "version = Version " ++ show branch ++ " []"
   where branch = versionNumbers $ packageVersion pkg_descr
+
+exports :: [String]
+exports = ["version"]

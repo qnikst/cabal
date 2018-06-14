@@ -1,6 +1,6 @@
 -----------------------------------------------------------------------------
 -- |
--- Module      :  Distribution.Simple.Build.Macros
+-- Module      :  Distribution.Simple.Build.Internal
 -- Copyright   :  Isaac Jones 2003-2005,
 --                Ross Paterson 2006,
 --                Duncan Coutts 2007-2008
@@ -15,14 +15,31 @@
 -- at runtime. This code should probably be split off into another module.
 --
 module Distribution.Simple.Build.Internal (
-    generate, pkgPathEnvVar
+    generate  
+  , ghc_newer_than
   ) where
 
-generateHeader moduleName otherPragmas body =
+import Prelude ()
+import Data.List (intercalate)
+import Distribution.Compat.Prelude
+
+import Distribution.Simple.Compiler
+import Distribution.Simple.LocalBuildInfo
+import Distribution.Text
+import Distribution.Version
+
+generate :: Text a
+          => LocalBuildInfo
+          -> a -- ^ Module name
+          -> [String] -- ^ Pragmas 
+          -> [String] -- ^ Exports
+          -> [String] -- ^ Imports
+          -> String   -- ^ Body
+          -> String
+generate lbi moduleName userPragmas userExports userImports body =
    let pragmas =
-            cpp_pragma
-         ++ no_rebindable_syntax_pragma
-         ++ otherPragmas
+            no_rebindable_syntax_pragma
+         ++ intercalate "\n" userPragmas
          ++ warning_pragmas
 
        -- -XRebindableSyntax is problematic because when paired with
@@ -36,13 +53,17 @@ generateHeader moduleName otherPragmas body =
        warning_pragmas =
         "{-# OPTIONS_GHC -fno-warn-missing-import-lists #-}\n"
 
-       warning_pragmas =
-        "{-# OPTIONS_GHC -fno-warn-missing-import-lists #-}\n"
+    in pragmas++
+       "module " ++ display moduleName ++ " (\n"++ (intercalate "," userExports) ++ "  ) where\n" ++
+       "\n"++
+       (intercalate "\n" userImports) ++
+       "\nimport Prelude\n"++
+       "\n"++ body
+  where
+    supports_rebindable_syntax= ghc_newer_than lbi (mkVersion [7,0,1])
 
-       header =
-         pragmas++
-         "module " ++ display moduleName ++ " (\n"++ exports ++ ") where\n" ++
-         "\n"++
-         otherImports
-         "import Prelude\n"++
-         "\n"++ body
+ghc_newer_than :: LocalBuildInfo -> Version -> Bool
+ghc_newer_than lbi minVersion =
+  case compilerCompatVersion GHC (compiler lbi) of
+    Nothing -> False
+    Just version -> version `withinRange` orLaterVersion minVersion

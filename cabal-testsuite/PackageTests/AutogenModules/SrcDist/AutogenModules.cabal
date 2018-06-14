@@ -31,6 +31,7 @@ Executable Exe
     other-modules:
         MyExeModule
         Paths_AutogenModules
+        Version_AutogenModules
         MyExeHelperModule
     autogen-modules:
         MyExeHelperModule
@@ -43,6 +44,7 @@ Test-Suite Test
     other-modules:
         MyTestModule
         Paths_AutogenModules
+        Version_AutogenModules
         MyTestHelperModule
     autogen-modules:
         MyTestHelperModule
@@ -55,6 +57,7 @@ Benchmark Bench
     other-modules:
         MyBenchModule
         Paths_AutogenModules
+        Version_AutogenModules
         MyBenchHelperModule
     autogen-modules:
         MyBenchHelperModule

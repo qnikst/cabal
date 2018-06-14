@@ -22,6 +22,7 @@ module Distribution.Simple.BuildPaths (
 
     autogenModuleName,
     autogenPathsModuleName,
+    autogenVersionModuleName,
     cppHeaderName,
     haddockName,
 
@@ -110,6 +111,14 @@ autogenPathsModuleName :: PackageDescription -> ModuleName
 autogenPathsModuleName pkg_descr =
   ModuleName.fromString $
     "Paths_" ++ map fixchar (display (packageName pkg_descr))
+  where fixchar '-' = '_'
+        fixchar c   = c
+--
+-- | The name of the auto-generated Paths_* module associated with a package
+autogenVersionModuleName :: PackageDescription -> ModuleName
+autogenVersionModuleName pkg_descr =
+  ModuleName.fromString $
+    "Version_" ++ map fixchar (display (packageName pkg_descr))
   where fixchar '-' = '_'
         fixchar c   = c
 

@@ -23,6 +23,8 @@ import Distribution.Compat.Prelude
 
 import Distribution.System
 import Distribution.Simple.Compiler
+import qualified Distribution.Simple.Build.VersionModule as Version
+import qualified Distribution.Simple.Build.Internal as Internal
 import Distribution.Package
 import Distribution.PackageDescription
 import Distribution.Simple.LocalBuildInfo
@@ -39,36 +41,38 @@ import System.FilePath ( pathSeparator )
 
 generate :: PackageDescription -> LocalBuildInfo -> ComponentLocalBuildInfo -> String
 generate pkg_descr lbi clbi =
-   let other_pragmas =
-            cpp_pragma
-         ++ ffi_pragmas
+   let pragmas = cpp_pragma ++ ffi_pragmas
+
+       cpp_pragma
+         | supports_cpp = ["{-# LANGUAGE CPP #-}"]
+         | otherwise    = []
 
        ffi_pragmas
-        | absolute = ""
+        | absolute = []
         | supports_language_pragma =
-          "{-# LANGUAGE ForeignFunctionInterface #-}\n"
+          ["{-# LANGUAGE ForeignFunctionInterface #-}"]
         | otherwise =
-          "{-# OPTIONS_GHC -fffi #-}\n"
+          ["{-# OPTIONS_GHC -fffi #-}"]
 
        foreign_imports
-        | absolute = ""
+        | absolute = []
         | otherwise =
-          "import Foreign\n"++
-          "import Foreign.C\n"
+          ["import Foreign"
+          ,"import Foreign.C"]
 
        reloc_imports
         | reloc =
-          "import System.Environment (getExecutablePath)\n"
-        | otherwise = ""
+          ["import System.Environment (getExecutablePath)"]
+        | otherwise = []
 
        exports = Version.exports ++
-        "    getBinDir, getLibDir, getDynLibDir, getDataDir, getLibexecDir,\n"++
-        "    getDataFileName, getSysconfDir\n"
-       other_imports = 
-        foreign_imports++
-        "import qualified Control.Exception as Exception\n"++
-        ++ Version.moduleImports ++
-        "import System.Environment (getEnv)\n"++
+                 [ "getBinDir", "getLibDir", "getDynLibDir", "getDataDir", "getLibexecDir"
+                 , "getDataFileName", "getSysconfDir"]
+       imports = 
+        foreign_imports ++
+        ["import qualified Control.Exception as Exception"]++
+        Version.imports ++
+        ["import System.Environment (getEnv)"]++
         reloc_imports
 
        common_body = 
@@ -88,7 +92,7 @@ generate pkg_descr lbi clbi =
          else
            "catchIO :: IO a -> (Exception.IOException -> IO a) -> IO a\n")++
         "catchIO = Exception.catch\n" ++
-        "\n" ++ Version.body
+        "\n" ++ (Version.body pkg_descr)
 
        body
         | reloc =
@@ -158,7 +162,8 @@ generate pkg_descr lbi clbi =
           get_prefix_stuff++
           "\n"++
           filename_stuff
-   in Internal.generate paths_modulename other_pragmas other_imports body
+   in Internal.generate lbi paths_modulename pragmas exports imports
+        $ common_body ++ body
 
  where
         cid = componentUnitId clbi
@@ -223,13 +228,8 @@ generate pkg_descr lbi clbi =
         path_sep = show [pathSeparator]
 
         supports_cpp = supports_language_pragma
-        supports_rebindable_syntax= ghc_newer_than (mkVersion [7,0,1])
-        supports_language_pragma = ghc_newer_than (mkVersion [6,6,1])
+        supports_language_pragma = Internal.ghc_newer_than lbi  (mkVersion [6,6,1])
 
-        ghc_newer_than minVersion =
-          case compilerCompatVersion GHC (compiler lbi) of
-            Nothing -> False
-            Just version -> version `withinRange` orLaterVersion minVersion
 
 -- | Generates the name of the environment variable controlling the path
 -- component of interest.
